@@ -1,0 +1,44 @@
+<com.amlogic.osdoverlay.PipLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/layout"
+    android:layout_width="640dip"
+    android:layout_height="480dip"
+    android:background="#00000000"
+   	>	
+    <OverlayView
+    	android:id="@+id/surfaceview"
+		android:layout_width="match_parent"
+		android:layout_height="480dip"
+        >
+    </OverlayView>
+   	
+    <RelativeLayout 
+        android:id="@+id/top_layout"
+        android:layout_width="match_parent"
+        android:layout_height="80dip"
+        android:orientation="horizontal"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentBottom="true"
+        >
+        <Button
+            android:id="@+id/full"
+            android:layout_width="120dip"
+            android:layout_height="80dip"
+            android:text="@string/full"
+            android:gravity="center"
+            android:layout_marginRight="20dip"
+            android:layout_alignParentLeft="true"
+            >
+        </Button>
+        
+        <Button
+            android:id="@+id/quit"
+            android:layout_width="120dip"
+            android:layout_height="80dip"
+            android:text="@string/quit"
+            android:gravity="center"
+            android:layout_marginRight="20dip"
+            android:layout_alignParentRight="true"
+            >
+        </Button>
+    </RelativeLayout>
+</com.amlogic.osdoverlay.PipLayout>
