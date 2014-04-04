@@ -67,6 +67,7 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
     private int mHdmiInWidth = 0;
     private int mHdmiInHeight = 0;
     private int mHdmiInInterlace = -1;
+    private int mHdmiInHz = -1;
     private TimerTask mHdmiInSizeTask = null;
     private Timer mHdmiInSizeTimer = null;
     private Handler mHdmiInSizeHandler = null;
@@ -123,6 +124,7 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
                     mHdmiInWidth = 0;
                     mHdmiInHeight = 0;
                     mHdmiInInterlace = -1;
+                    mHdmiInHz = -1;
                     if (msg.arg1 == SHOW_BLACK && mSurfaceHolder != null)
                         mOverlayView.setVisibility(View.INVISIBLE);
                     if (msg.arg2 == EXIT) {
@@ -471,6 +473,7 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
                         int width = 0;
                         int height = 0;
                         int interlace = -1;
+                        int hz = -1;
                         String[] hdmiInSize = null;
                         if (!invalidMode) {
                             hdmiInSize = hdmiInMode.split(":");
@@ -486,19 +489,20 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
                                     width = FullActivity.MODES_WIDTH[i];
                                     height = FullActivity.MODES_HEIGHT[i];
                                     interlace = FullActivity.MODES_INTERLACE[i];
+                                    hz = FullActivity.MODES_HZ[i];
                                     break;
                                 }
                             }
-                            Log.d(TAG, "startHdmiInSizeTimer(), width: " + width + ", height: " + height + ", interlace: " + interlace);
+                            Log.d(TAG, "startHdmiInSizeTimer(), width: " + width + ", height: " + height + ", interlace: " + interlace + ", hz: " + hz);
 
                             if (plugged && signal) {
                                 if (!mHdmiPlugged)
                                     mHdmiPlugged = true;
 
                                 if (width > 0 && height > 0) {
-                                    if (mHdmiInWidth != width || mHdmiInHeight != height || mHdmiInInterlace != interlace) {
+                                    if (mHdmiInWidth != width || mHdmiInHeight != height || mHdmiInInterlace != interlace || mHdmiInHz != hz) {
                                         int flag = STOP_MOV;
-                                        if (mHdmiInWidth == 0 && mHdmiInHeight == 0)
+                                        if (mHdmiInWidth == 0 && mHdmiInHeight == 0 && mHdmiInInterlace == -1 && mHdmiInHz == -1)
                                             flag = START_MOV;
 
                                         Log.d(TAG, "startHdmiInSizeTimer(), stopAudioHandleTimer");
@@ -516,6 +520,7 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
                                         mHdmiInWidth = width;
                                         mHdmiInHeight = height;
                                         mHdmiInInterlace = interlace;
+                                        mHdmiInHz = hz;
                                         Log.d(TAG, "startHdmiInSizeTimer(), startAudioHandleTimer");
                                         startAudioHandleTimer();
                                         Log.d(TAG, "startHdmiInSizeTimer(), enableAudio 1");

@@ -45,9 +45,11 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
     public static final int[] MODES_INTERLACE = {0, 0, 1, 1, 0, 0, 0, 1, 0, 1};
     public static final int[] MODES_WIDTH = {1920, 1920, 1920, 1920, 1280, 1280, 720, 720, 720, 720};
     public static final int[] MODES_HEIGHT = {1080, 1080, 1080, 1080, 720, 720, 480, 480, 576, 576};
+    public static final int[] MODES_HZ = {60, 50, 60, 50, 60, 50, 0, 0, 0, 0};
     private int mHdmiInWidth = 0;
     private int mHdmiInHeight = 0;
     private int mHdmiInInterlace = -1;
+    private int mHdmiInHz = -1;
     private TimerTask mHdmiInSizeTask = null;
     private Timer mHdmiInSizeTimer = null;
     private Handler mHdmiInSizeHandler = null;
@@ -216,6 +218,7 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                         int width = 0;
                         int height = 0;
                         int interlace = -1;
+                        int hz = -1;
                         String[] hdmiInSize = null;
                         if (!invalidMode) {
                             hdmiInSize = hdmiInMode.split(":");
@@ -231,19 +234,20 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                                     width = MODES_WIDTH[i];
                                     height = MODES_HEIGHT[i];
                                     interlace = MODES_INTERLACE[i];
+                                    hz = MODES_HZ[i];
                                     break;
                                 }
                             }
-                            Log.d(TAG, "startHdmiInSizeTimer(), width: " + width + ", height: " + height + ", interlace: " + interlace);
+                            Log.d(TAG, "startHdmiInSizeTimer(), width: " + width + ", height: " + height + ", interlace: " + interlace + ", hz: " + hz);
 
                             if (plugged && signal) {
                                 if (!mHdmiPlugged)
                                     mHdmiPlugged = true;
 
                                 if (width > 0 && height > 0) {
-                                    if (mHdmiInWidth != width || mHdmiInHeight != height || mHdmiInInterlace != interlace) {
+                                    if (mHdmiInWidth != width || mHdmiInHeight != height || mHdmiInInterlace != interlace || mHdmiInHz != hz) {
                                         int flag = STOP_MOV;
-                                        if (mHdmiInWidth == 0 && mHdmiInHeight == 0 && mHdmiInInterlace == -1)
+                                        if (mHdmiInWidth == 0 && mHdmiInHeight == 0 && mHdmiInInterlace == -1 && mHdmiInHz == -1)
                                             flag = START_MOV;
 
                                         Log.d(TAG, "startHdmiInSizeTimer(), stopAudioHandleTimer");
@@ -260,6 +264,7 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                                         mHdmiInWidth = width;
                                         mHdmiInHeight = height;
                                         mHdmiInInterlace = interlace;
+                                        mHdmiInHz = hz;
                                         Log.d(TAG, "startHdmiInSizeTimer(), startAudioHandleTimer");
                                         startAudioHandleTimer();
                                         Log.d(TAG, "startHdmiInSizeTimer(), enableAudio 1");
@@ -393,6 +398,7 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                     mHdmiInWidth = 0;
                     mHdmiInHeight = 0;
                     mHdmiInInterlace = -1;
+                    mHdmiInHz = -1;
                     if (msg.arg2 == EXIT) {
                         mOverlayView.deinit();
                         finish();
