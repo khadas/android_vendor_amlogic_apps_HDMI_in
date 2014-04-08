@@ -63,6 +63,16 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
     private final int EXIT = 4;
     private int mHdmiInStatus = HDMI_IN_STOP;
 
+    private Button.OnClickListener mPipBtnListener = new Button.OnClickListener() {
+        @Override
+        public void onClick(View v) {
+            Log.d(TAG, "mPipBtn onClick(), stopAudioHandleTimer");
+            stopAudioHandleTimer();
+            startPip();
+            finish();
+        }
+    };
+
     @Override
     public void onCreate(Bundle savedInstanceState) 
     {
@@ -86,13 +96,14 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
 
         mPipBtn = (Button)findViewById(R.id.pip);
 
-        mPipBtn.setOnClickListener(new Button.OnClickListener() {
+        mPipBtn.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
             @Override
-            public void onClick(View v) {
-                Log.d(TAG, "mPipBtn onClick(), stopAudioHandleTimer");
-                stopAudioHandleTimer();
-                startPip();
-                finish();
+            public void onViewAttachedToWindow(View v) {
+            }
+
+            @Override
+            public void onViewDetachedFromWindow(View v) {
+                v.setOnClickListener(null);
             }
         });
 
@@ -361,6 +372,7 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                             Surface sur = mSurfaceHolder.getSurface();
                             mOverlayView.setPreviewWindow(sur);
                             mOverlayView.startMov();
+                            mPipBtn.setOnClickListener(mPipBtnListener);
                         }
                     }
                     break;

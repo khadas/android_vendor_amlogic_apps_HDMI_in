@@ -104,6 +104,7 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
                             Surface sur = mSurfaceHolder.getSurface();
                             mOverlayView.setPreviewWindow(sur);
                             mOverlayView.startMov();
+                            mFullBtn.setOnClickListener(mFullBtnListener);
                         }
                     }
                     break;
@@ -133,6 +134,34 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
                 }
                 break;
             }
+        }
+    };
+
+    private Button.OnClickListener mFullBtnListener = new Button.OnClickListener() {
+        @Override
+        public void onClick(View v) {
+            Intent intent = new Intent();
+            ComponentName name = new ComponentName(packageName, fullActivityName);
+            intent.setComponent(name);
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            intent.putExtra("source", mInputSource);
+
+            hidePipWindow();
+            if (mHdmiPlugged) {
+                stopAudioHandleTimer();
+                mOverlayView.displayPip(0, 0, 0, 0);
+                mOverlayView.invalidate();
+                mOverlayView.stopMov();
+            }
+            isShowingOnGraphic = false;
+            mOverlayView.deinit();
+            stopHdmiInSizeTimer();
+            mSurfaceCreated = false;
+
+            mIsFloating = false;
+            Log.d(TAG, "mFullBtn, stop FloatWindowService");
+            mContext.stopService(new Intent(mContext, FloatWindowService.class));
+            mContext.startActivity(intent);
         }
     };
 
@@ -179,26 +208,26 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
         mHandler.sendMessageDelayed(message, 500);
     }
 
-	public void stopHdmiin() {
-		Log.d(TAG, "stopHdmiin, hidePipWindow");
-		hidePipWindow();
-		Log.d(TAG, "stopHdmiin, stopAudioHandleTimer");
-		stopAudioHandleTimer();
-		Log.d(TAG, "stopHdmiin, stopHdmiInSizeTimer");
-		stopHdmiInSizeTimer();
-		if (mHdmiPlugged) {
-			mOverlayView.displayPip(0, 0, 0, 0);
-			mOverlayView.invalidate();
-			Log.d(TAG, "stopHdmiin, stopMov");
-			mOverlayView.stopMov();
-		}
-		Log.d(TAG, "stopHdmiin, deinit");
-		mOverlayView.deinit();
-		isShowingOnGraphic = false;
-		mIsFloating = false;
-		Log.d(TAG, "stopHdmiin, stop FloatWindowService");
-		mContext.stopService(new Intent(mContext, FloatWindowService.class));
-	}
+    public void stopHdmiin() {
+        Log.d(TAG, "stopHdmiin, hidePipWindow");
+        hidePipWindow();
+        Log.d(TAG, "stopHdmiin, stopAudioHandleTimer");
+        stopAudioHandleTimer();
+        Log.d(TAG, "stopHdmiin, stopHdmiInSizeTimer");
+        stopHdmiInSizeTimer();
+        if (mHdmiPlugged) {
+            mOverlayView.displayPip(0, 0, 0, 0);
+            mOverlayView.invalidate();
+            Log.d(TAG, "stopHdmiin, stopMov");
+            mOverlayView.stopMov();
+        }
+        Log.d(TAG, "stopHdmiin, deinit");
+        mOverlayView.deinit();
+        isShowingOnGraphic = false;
+        mIsFloating = false;
+        Log.d(TAG, "stopHdmiin, stop FloatWindowService");
+        mContext.stopService(new Intent(mContext, FloatWindowService.class));
+    }
 
     private void registerOutputModeChangedListener() {
         if (mReceiver == null) {
@@ -256,17 +285,17 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
         SystemProperties.set(PIP_FOCUS_PROP, "true");
     }
 
-	private void gainLayoutParams(boolean focusable) {
+    private void gainLayoutParams(boolean focusable) {
         if (mLayoutParams == null) {
             mLayoutParams = new WindowManager.LayoutParams();
             mLayoutParams.type = WindowManager.LayoutParams.TYPE_PHONE;
             mLayoutParams.format = PixelFormat.RGBA_8888;
             mLayoutParams.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
-			if (!focusable) {
-				mLayoutParams.flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+            if (!focusable) {
+                mLayoutParams.flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
                 SystemProperties.set(PIP_FOCUS_PROP, "false");
             } else {
-				mLayoutParams.flags &= ~WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+                mLayoutParams.flags &= ~WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
                 SystemProperties.set(PIP_FOCUS_PROP, "true");
             }
             mLayoutParams.gravity = Gravity.LEFT | Gravity.TOP;
@@ -275,20 +304,20 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
             mLayoutParams.width = 560;
             mLayoutParams.height = 420;
         } else {
-			if (!focusable) {
-				mLayoutParams.flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+            if (!focusable) {
+                mLayoutParams.flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
                 SystemProperties.set(PIP_FOCUS_PROP, "false");
             } else {
-				mLayoutParams.flags &= ~WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+                mLayoutParams.flags &= ~WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
                 SystemProperties.set(PIP_FOCUS_PROP, "true");
             }
-		}
-	}
+        }
+    }
 
-	public void updateViewFocusable(boolean focusable) {
-		gainLayoutParams(focusable);
-		mWindowManager.updateViewLayout(mLayout, mLayoutParams);
-	}
+    public void updateViewFocusable(boolean focusable) {
+        gainLayoutParams(focusable);
+        mWindowManager.updateViewLayout(mLayout, mLayoutParams);
+    }
 
     private void showPipWindow() {
         if (mWindowManager == null)
@@ -296,11 +325,11 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
 
         statusBarHeight = 0;
 
-		gainLayoutParams(true);
+        gainLayoutParams(true);
         if (mLayout == null) {
             LayoutInflater inflater = (LayoutInflater)mContext.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
             mLayout = (PipLayout)inflater.inflate(R.layout.pip, null);
-			Log.d(TAG, "showPipWindow, mLayout: " + mLayout);
+            Log.d(TAG, "showPipWindow, mLayout: " + mLayout);
 
             mSurfaceCreated = false;
             mOverlayView = (OverlayView)mLayout.findViewById(R.id.surfaceview);
@@ -338,38 +367,21 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
             }
         });
 
-        mFullBtn.setOnClickListener(new View.OnClickListener() {
+        mFullBtn.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
             @Override
-            public void onClick(View v) {
-                Intent intent = new Intent();
-                ComponentName name = new ComponentName(packageName, fullActivityName);
-                intent.setComponent(name);
-                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                intent.putExtra("source", mInputSource);
+            public void onViewAttachedToWindow(View v) {
+            }
 
-                hidePipWindow();
-                if (mHdmiPlugged) {
-                    stopAudioHandleTimer();
-                    mOverlayView.displayPip(0, 0, 0, 0);
-                    mOverlayView.invalidate();
-                    mOverlayView.stopMov();
-                }
-                isShowingOnGraphic = false;
-                mOverlayView.deinit();
-                stopHdmiInSizeTimer();
-                mSurfaceCreated = false;
-
-                mIsFloating = false;
-                Log.d(TAG, "mFullBtn, stop FloatWindowService");
-                mContext.stopService(new Intent(mContext, FloatWindowService.class));
-                mContext.startActivity(intent);
+            @Override
+            public void onViewDetachedFromWindow(View v) {
+                v.setOnClickListener(null);
             }
         });
 
         mQuitBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-				stopHdmiin();
+                stopHdmiin();
             }
         });
 
