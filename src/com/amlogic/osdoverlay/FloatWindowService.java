@@ -26,6 +26,9 @@ import android.widget.Button;
 import android.widget.OverlayView;
 import android.widget.RelativeLayout;
 import android.text.TextUtils;
+import android.media.AudioManager;
+import android.media.AudioManager.OnAudioFocusChangeListener;
+import android.media.AudioSystem;
 import android.util.Log;
 
 import java.util.Timer;
@@ -76,8 +79,13 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
     private static final String HDMIIN_PIP_FOCUS = "com.amlogic.hdmiin.pipfocus";
     private BroadcastReceiver mReceiver = null;
 
+    private TimerTask mAudioTask = null;
     private Timer mAudioTimer = null;
     private Handler mAudioHandler = null;
+    private AudioManager mAudioManager;
+    private boolean mAudioDeviceConnected = false;
+    private static final String VOLUME_PROP = "mbx.hdmiin.vol";
+    private boolean mAudioRequested = false;
 
     private Handler mHandler = new Handler() {
         @Override
@@ -257,6 +265,9 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
         mInputSource = intent.getIntExtra("source", -1);
         Log.d(TAG, "onStartCommand(), mInputSource: " + mInputSource);
         registerOutputModeChangedListener();
+        mAudioManager = (AudioManager)mContext.getSystemService(Context.AUDIO_SERVICE);
+        SystemProperties.set(VOLUME_PROP, "15");
+        mLayout = null;
         showPipWindow();
         return super.onStartCommand(intent, flags, startId);
     }
@@ -401,29 +412,98 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
         mWindowManager.updateViewLayout(mLayout, mLayoutParams);
     }
 
+    public void requestAudioFocus() {
+        int status = AudioManager.AUDIOFOCUS_REQUEST_FAILED;
+        if (!mAudioRequested) {
+            status = mAudioManager.requestAudioFocus(mAudioFocusListener, AudioManager.STREAM_MUSIC,
+                    AudioManager.AUDIOFOCUS_GAIN);
+            if (status == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                mAudioRequested = true;
+                SystemProperties.set(VOLUME_PROP, "15");
+            }
+        }
+    }
+
+    public void abandonAudioFocus() {
+        int status = AudioManager.AUDIOFOCUS_REQUEST_FAILED;
+        if (mAudioRequested) {
+            status = mAudioManager.abandonAudioFocus(mAudioFocusListener);
+            if (status == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                mAudioRequested = false;
+                SystemProperties.set(VOLUME_PROP, "0");
+            }
+        }
+    }
+
+    private OnAudioFocusChangeListener mAudioFocusListener = new OnAudioFocusChangeListener() {
+        public void onAudioFocusChange(int focusChange) {
+            int status = AudioManager.AUDIOFOCUS_REQUEST_FAILED;
+            Log.d(TAG, "onAudioFocusChange, focusChange: " + focusChange);
+            if (!mAudioDeviceConnected && mAudioRequested) {
+                Log.d(TAG, "onAudioFocusChange, abandonAudioFocus");
+                status = mAudioManager.abandonAudioFocus(this);
+                if (status == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                    mAudioRequested = false;
+                }
+                return;
+            }
+            switch (focusChange) {
+                case AudioManager.AUDIOFOCUS_LOSS:
+                case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
+                    Log.d(TAG, "onAudioFocusChange, AUDIOFOCUS_LOSS, volume 0");
+                    SystemProperties.set(VOLUME_PROP, "0");
+                    break;
+                case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
+                    break;
+                case AudioManager.AUDIOFOCUS_GAIN:
+                    Log.d(TAG, "onAudioFocusChange, AUDIOFOCUS_GAIN, volume 15");
+                    SystemProperties.set(VOLUME_PROP, "15");
+                    break;
+            }
+        }
+    };
+
     private void startAudioHandleTimer() {
         if (mAudioHandler == null) {
             mAudioHandler = new Handler() {
                 @Override
                 public void handleMessage(Message msg) {
-                    if (mOverlayView != null) {
-                        mOverlayView.handleAudio();
+                    if (mAudioTimer == null || mAudioTask == null)
+                        return;
+
+                    switch (msg.what) {
+                        case 0:
+                            int audioReady = 0;
+                            if (mOverlayView != null) {
+                                audioReady = mOverlayView.handleAudio();
+                                if (audioReady == 1 && !mAudioDeviceConnected) {
+                                    mAudioManager.setWiredDeviceConnectionState(AudioSystem.DEVICE_IN_AUX_DIGITAL, 1, "hdmi in");
+                                    mAudioDeviceConnected = true;
+                                    Log.d(TAG, "startAudioHandleTimer, requestAudioFocus");
+                                    requestAudioFocus();
+                                }
+                            }
+                            break;
                     }
                     super.handleMessage(msg);
                 }
             };
         }
 
-        if (mAudioTimer == null) {
-            mAudioTimer = new Timer();
-            mAudioTimer.schedule(new TimerTask() {
+        if (mAudioTask == null) {
+            mAudioTask = new TimerTask() {
                 @Override
                 public void run() {
                     Message message = new Message();
                     message.what = 0;
                     mAudioHandler.sendMessage(message);
                 }
-            }, 0, 20);
+            };
+        }
+
+        if (mAudioTimer == null) {
+            mAudioTimer = new Timer();
+            mAudioTimer.schedule(mAudioTask, 0, 20);
         }
     }
 
@@ -434,7 +514,17 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
             Log.d(TAG, "stopAudioHandleTimer(), enableAudio 0");
             mOverlayView.enableAudio(0);
         }
+        if (mAudioTask != null) {
+            mAudioTask.cancel();
+            mAudioTask = null;
+        }
         if (mOverlayView != null) {
+            if (mAudioDeviceConnected) {
+                mAudioManager.setWiredDeviceConnectionState(AudioSystem.DEVICE_IN_AUX_DIGITAL, 0, "hdmi in");
+                Log.d(TAG, "stopAudioHandleTimer, abandonAudioFocus");
+                abandonAudioFocus();
+            }
+            mAudioDeviceConnected = false;
             Log.d(TAG, "stopAudioHandleTimer() invoke handleAudio()");
             mOverlayView.handleAudio();
         }
@@ -445,6 +535,9 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
             mHdmiInSizeHandler = new Handler() {
                 @Override
                 public void handleMessage(Message msg) {
+                    if (mHdmiInSizeTimer == null || mHdmiInSizeTask == null)
+                        return;
+
                     if (mOverlayView != null && mSurfaceCreated) {
                         boolean enabled = mOverlayView.isEnable();
                         Log.d(TAG, "startHdmiInSizeTimer(), enabled: " + enabled);
@@ -452,7 +545,7 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
                         Log.d(TAG, "startHdmiInSizeTimer(), plugged: " + plugged);
                         boolean signal = mOverlayView.hdmiSignal();
                         Log.d(TAG, "startHdmiInSizeTimer(), signal: " + signal);
-                        if (!enabled || (!plugged && !signal)) {
+                        if (!enabled || !plugged) {
                             if (mHdmiInStatus == HDMI_IN_START && mHdmiPlugged) {
                                 Log.d(TAG, "startHdmiInSizeTimer(), HDMI_IN_STOP, SHOW_BLACK, EXIT");
                                 Message message = mHandler.obtainMessage(HDMI_IN_STOP, SHOW_BLACK, EXIT);

@@ -7,6 +7,7 @@ import android.graphics.PixelFormat;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
+import android.os.SystemProperties;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.Surface;
@@ -19,6 +20,9 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import android.text.TextUtils;
+import android.media.AudioManager;
+import android.media.AudioManager.OnAudioFocusChangeListener;
+import android.media.AudioSystem;
 
 import android.widget.Button;
 import android.widget.ImageView;
@@ -55,6 +59,7 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
     private Handler mHdmiInSizeHandler = null;
     private boolean mHdmiPlugged = false;
 
+    private TimerTask mAudioTask = null;
     private Timer mAudioTimer = null;
     private Handler mAudioHandler = null;
     private final int HDMI_IN_START = 0x10001;
@@ -64,6 +69,10 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
     private final int SHOW_BLACK = 3;
     private final int EXIT = 4;
     private int mHdmiInStatus = HDMI_IN_STOP;
+    private AudioManager mAudioManager;
+    private boolean mAudioDeviceConnected = false;
+    private static final String VOLUME_PROP = "mbx.hdmiin.vol";
+    private boolean mAudioRequested = false;
 
     private Button.OnClickListener mPipBtnListener = new Button.OnClickListener() {
         @Override
@@ -95,6 +104,9 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
         mSurfaceHolder = mOverlayView.getHolder();
         mSurfaceHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
         mSurfaceHolder.addCallback(this);
+        mAudioManager = (AudioManager)mContext.getSystemService(Context.AUDIO_SERVICE);
+        Log.d(TAG, "onCreate(), mbx.hdmiin.vol: 15");
+        SystemProperties.set(VOLUME_PROP, "15");
 
         mPipBtn = (Button)findViewById(R.id.pip);
 
@@ -145,29 +157,94 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
         }
     }
 
+    public void requestAudioFocus() {
+        int status = AudioManager.AUDIOFOCUS_REQUEST_FAILED;
+        if (!mAudioRequested) {
+            status = mAudioManager.requestAudioFocus(mAudioFocusListener, AudioManager.STREAM_MUSIC,
+                    AudioManager.AUDIOFOCUS_GAIN);
+            if (status == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                mAudioRequested = true;
+                SystemProperties.set(VOLUME_PROP, "15");
+            }
+        }
+    }
+
+    public void abandonAudioFocus() {
+        int status = AudioManager.AUDIOFOCUS_REQUEST_FAILED;
+        if (mAudioRequested) {
+            status = mAudioManager.abandonAudioFocus(mAudioFocusListener);
+            if (status == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                mAudioRequested = false;
+                SystemProperties.set(VOLUME_PROP, "0");
+            }
+        }
+    }
+
+    private OnAudioFocusChangeListener mAudioFocusListener = new OnAudioFocusChangeListener() {
+        public void onAudioFocusChange(int focusChange) {
+            int status = AudioManager.AUDIOFOCUS_REQUEST_FAILED;
+            Log.d(TAG, "onAudioFocusChange, focusChange: " + focusChange);
+            if (!mAudioDeviceConnected && mAudioRequested) {
+                Log.d(TAG, "onAudioFocusChange, abandonAudioFocus");
+                status = mAudioManager.abandonAudioFocus(this);
+                if (status == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                    mAudioRequested = false;
+                }
+                return;
+            }
+            switch (focusChange) {
+                case AudioManager.AUDIOFOCUS_LOSS:
+                case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
+                    Log.d(TAG, "onAudioFocusChange, AUDIOFOCUS_LOSS, volume 0");
+                    SystemProperties.set(VOLUME_PROP, "0");
+                    break;
+                case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
+                    break;
+                case AudioManager.AUDIOFOCUS_GAIN:
+                    Log.d(TAG, "onAudioFocusChange, AUDIOFOCUS_GAIN, volume 15");
+                    SystemProperties.set(VOLUME_PROP, "15");
+                    break;
+            }
+        }
+    };
+
     private void startAudioHandleTimer() {
         if (mAudioHandler == null) {
             mAudioHandler = new Handler() {
                 @Override
                 public void handleMessage(Message msg) {
+                    if (mAudioTimer == null || mAudioTask == null)
+                        return;
+
+                    int audioReady = 0;
                     if (mOverlayView != null) {
-                        mOverlayView.handleAudio();
+                        audioReady = mOverlayView.handleAudio();
+                        if (audioReady == 1 && !mAudioDeviceConnected) {
+                            mAudioManager.setWiredDeviceConnectionState(AudioSystem.DEVICE_IN_AUX_DIGITAL, 1, "hdmi in");
+                            mAudioDeviceConnected = true;
+                            Log.d(TAG, "startAudioHandleTimer, requestAudioFocus");
+                            requestAudioFocus();
+                        }
                     }
                     super.handleMessage(msg);
                 }
             };
         }
 
-        if (mAudioTimer == null) {
-            mAudioTimer = new Timer();
-            mAudioTimer.schedule(new TimerTask() {
+        if (mAudioTask == null) {
+            mAudioTask = new TimerTask() {
                 @Override
                 public void run() {
                     Message message = new Message();
                     message.what = 0;
                     mAudioHandler.sendMessage(message);
                 }
-            }, 0, 20);
+            };
+        }
+
+        if (mAudioTimer == null) {
+            mAudioTimer = new Timer();
+            mAudioTimer.schedule(mAudioTask, 0, 20);
         }
     }
 
@@ -179,7 +256,17 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
             Log.d(TAG, "stopAudioHandleTimer(), enableAudio 0");
             mOverlayView.enableAudio(0);
         }
+        if (mAudioTask != null) {
+            mAudioTask.cancel();
+            mAudioTask = null;
+        }
         if (mOverlayView != null) {
+            if (mAudioDeviceConnected) {
+                mAudioManager.setWiredDeviceConnectionState(AudioSystem.DEVICE_IN_AUX_DIGITAL, 0, "hdmi in");
+                Log.d(TAG, "stopAudioHandleTimer, abandonAudioFocus");
+                abandonAudioFocus();
+            }
+            mAudioDeviceConnected = false;
             Log.d(TAG, "stopAudioHandleTimer() invoke handleAudio()");
             mOverlayView.handleAudio();
         }
@@ -190,6 +277,9 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
             mHdmiInSizeHandler = new Handler() {
                 @Override
                 public void handleMessage(Message msg) {
+                    if (mHdmiInSizeTimer == null || mHdmiInSizeTask == null)
+                        return;
+
                     if (mOverlayView != null && mSurfaceCreated) {
                         boolean enabled = mOverlayView.isEnable();
                         Log.d(TAG, "startHdmiInSizeTimer(), enabled: " + enabled);
@@ -197,7 +287,7 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                         Log.d(TAG, "startHdmiInSizeTimer(), plugged: " + plugged);
                         boolean signal = mOverlayView.hdmiSignal();
                         Log.d(TAG, "startHdmiInSizeTimer(), signal: " + signal);
-                        if (!enabled || (!plugged && !signal)) {
+                        if (!enabled || !plugged) {
                             if (mHdmiInStatus == HDMI_IN_START && mHdmiPlugged) {
                                 Log.d(TAG, "startHdmiInSizeTimer(), HDMI_IN_STOP, SHOW_BLACK, EXIT");
                                 Message message = mHandler.obtainMessage(HDMI_IN_STOP, SHOW_BLACK, EXIT);
