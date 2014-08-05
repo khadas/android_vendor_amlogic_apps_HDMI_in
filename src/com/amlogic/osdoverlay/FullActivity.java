@@ -275,11 +275,11 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                                     }
                                 }
                             }
-                        } else if (invalidMode && !plugged) {
+                        } else if (invalidMode && (!plugged || !signal)) {
                             if (mHdmiInStatus == HDMI_IN_START) {
                                 Log.d(TAG, "startHdmiInSizeTimer(), HDMI_IN_STOP, SHOW_BLACK");
                                 Message message = mHandler.obtainMessage(HDMI_IN_STOP, SHOW_BLACK, 0);
-                                mHandler.sendMessageDelayed(message, 500);
+                                mHandler.sendMessageDelayed(message, 0);
                                 mHdmiPlugged = false;
                             }
                         }
