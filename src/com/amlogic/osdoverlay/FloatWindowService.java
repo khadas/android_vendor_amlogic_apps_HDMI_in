@@ -7,6 +7,9 @@ import android.content.IntentFilter;
 import android.content.ComponentName;
 import android.content.BroadcastReceiver;
 import android.graphics.PixelFormat;
+import android.graphics.Canvas;
+import android.graphics.PorterDuff;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
@@ -75,9 +78,12 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
     private Timer mHdmiInSizeTimer = null;
     private Handler mHdmiInSizeHandler = null;
     private boolean mHdmiPlugged = false;
+    private boolean mHdmiinStoped = false;
     private static final String OUTPUT_MODE_CHANGED = "android.amlogic.settings.CHANGE_OUTPUT_MODE";
     private static final String HDMIIN_PIP_FOCUS = "com.amlogic.hdmiin.pipfocus";
+    private static final String HDMIIN_PAUSE = "com.amlogic.hdmiin.pause";
     private BroadcastReceiver mReceiver = null;
+    private Handler mSurfaceAvailableHandler = new Handler();
 
     private TimerTask mAudioTask = null;
     private Timer mAudioTimer = null;
@@ -96,6 +102,8 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
                 case HDMI_IN_START:
                     Log.d(TAG, "HDMI_IN_START");
                     mHdmiInStatus = HDMI_IN_START;
+                    if (mHdmiinStoped)
+                        mHdmiinStoped = false;
                     if (msg.arg1 == STOP_MOV) {
                         mOverlayView.setVisibility(View.VISIBLE);
                         mOverlayView.setEnable(true);
@@ -137,10 +145,11 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
                         mOverlayView.setVisibility(View.INVISIBLE);
                     if (msg.arg2 == EXIT) {
                         hidePipWindow();
-                        isShowingOnGraphic = false;
                         mOverlayView.deinit();
+                        mHdmiinStoped = true;
                         mIsFloating = false;
                     }
+                    isShowingOnGraphic = false;
                 }
                 break;
             }
@@ -157,6 +166,7 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
             intent.putExtra("source", mInputSource);
 
             hidePipWindow();
+            mOverlayView.setVisibility(View.INVISIBLE);
             if (mHdmiPlugged) {
                 stopAudioHandleTimer();
                 mOverlayView.displayPip(0, 0, 0, 0);
@@ -165,6 +175,7 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
             }
             isShowingOnGraphic = false;
             mOverlayView.deinit();
+            mHdmiinStoped = true;
             stopHdmiInSizeTimer();
             mSurfaceCreated = false;
 
@@ -183,12 +194,20 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
         Log.d(TAG, "surfaceCreated()");
+        if (holder != null) {
+            Canvas canvas = holder.lockCanvas();
+            Log.d(TAG, "surfaceCreated(), drawColor TRANSPARENT");
+            canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR);
+            holder.unlockCanvasAndPost(canvas);
+        } else
+            Log.d(TAG, "surfaceCreated(), holder == null");
         mSurfaceCreated = true;
     }
 
     @Override
     public void surfaceDestroyed(SurfaceHolder holder) {
         Log.d(TAG, "surfaceDestroyed()");
+        mSurfaceCreated = false;
     }
 
     @Override
@@ -196,7 +215,18 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
         return null;
     }
 
-    private void startHdmiin(int flag) {
+    private void sendStartMessage(int arg1, int arg2, long delayMillis) {
+        Message message = mHandler.obtainMessage(HDMI_IN_START, arg1, arg2);
+        mHandler.sendMessageDelayed(message, delayMillis);
+    }
+
+    private boolean isSurfaceAvailable() {
+        if (mSurfaceHolder == null)
+            return false;
+        return mOverlayView.isSurfaceAvailable(mSurfaceHolder.getSurface());
+    }
+
+    private void startHdmiin(final int flag) {
         Log.d(TAG, "startHdmiin(), stopAudioHandleTimer");
         stopAudioHandleTimer();
         if (flag == STOP_MOV) {
@@ -213,14 +243,33 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
         startAudioHandleTimer();
         Log.d(TAG, "startHdmiin(), enableAudio 1");
         mOverlayView.enableAudio(1);
-        Log.d(TAG, "startHdmiin(), HDMI_IN_START");
-        Message message = mHandler.obtainMessage(HDMI_IN_START, flag, 0);
-        mHandler.sendMessageDelayed(message, 500);
+
+        if (isSurfaceAvailable()) {
+            Log.d(TAG, "startHdmiin(), HDMI_IN_START");
+            sendStartMessage(flag, 0, 500);
+        } else {
+            Runnable runnable = new Runnable() {
+                @Override
+                public void run() {
+                    if (!isSurfaceAvailable()) {
+                        Log.d(TAG, "startHdmiin(), surace unavailable, delay 100ms");
+                        mSurfaceAvailableHandler.postDelayed(this, 100);
+                    } else {
+                        Log.d(TAG, "startHdmiin(), HDMI_IN_START");
+                        sendStartMessage(flag, 0, 500);
+                        mSurfaceAvailableHandler.removeCallbacks(this);
+                    }
+                }
+            };
+            Log.d(TAG, "startHdmiin(), surace unavailable, delay 100ms");
+            mSurfaceAvailableHandler.postDelayed(runnable, 100);
+        }
     }
 
-    public void stopHdmiin() {
+    public void stopHdmiin(boolean stopService) {
         Log.d(TAG, "stopHdmiin, hidePipWindow");
         hidePipWindow();
+        mOverlayView.setVisibility(View.INVISIBLE);
         Log.d(TAG, "stopHdmiin, stopAudioHandleTimer");
         stopAudioHandleTimer();
         Log.d(TAG, "stopHdmiin, stopHdmiInSizeTimer");
@@ -233,10 +282,13 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
         }
         Log.d(TAG, "stopHdmiin, deinit");
         mOverlayView.deinit();
+        mHdmiinStoped = true;
         isShowingOnGraphic = false;
         mIsFloating = false;
-        Log.d(TAG, "stopHdmiin, stop FloatWindowService");
-        mContext.stopService(new Intent(mContext, FloatWindowService.class));
+        if (stopService) {
+            Log.d(TAG, "stopHdmiin, stop FloatWindowService");
+            mContext.stopService(new Intent(mContext, FloatWindowService.class));
+        }
     }
 
     private void registerOutputModeChangedListener() {
@@ -249,12 +301,18 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
                         startHdmiin(STOP_MOV);
                     } else if (action.equals(HDMIIN_PIP_FOCUS)) {
                         updateViewFocusable(true);
+                    } else if (action.equals(HDMIIN_PAUSE)) {
+                        if (!mHdmiinStoped)
+                            stopHdmiin(false);
+                        else
+                            showPipWindow();
                     }
                 }
             };
             IntentFilter filter = new IntentFilter();
             filter.addAction(OUTPUT_MODE_CHANGED);
             filter.addAction(HDMIIN_PIP_FOCUS);
+            filter.addAction(HDMIIN_PAUSE);
             registerReceiver(mReceiver, filter);
         }
     }
@@ -268,6 +326,7 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
         mAudioManager = (AudioManager)mContext.getSystemService(Context.AUDIO_SERVICE);
         SystemProperties.set(VOLUME_PROP, "15");
         mLayout = null;
+        mHdmiinStoped = false;
         showPipWindow();
         return super.onStartCommand(intent, flags, startId);
     }
@@ -283,13 +342,15 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
         Log.d(TAG, "onDestroy(), mIsFloating: " + mIsFloating);
         if (mIsFloating) {
             hidePipWindow();
+            mOverlayView.setVisibility(View.INVISIBLE);
             if (mHdmiPlugged) {
                 mOverlayView.displayPip(0, 0, 0, 0);
                 mOverlayView.invalidate();
-                Log.d(TAG, "mQuitBtn onClick(), stopMov");
+                Log.d(TAG, "onDestroy(), stopMov");
                 mOverlayView.stopMov();
             }
             mOverlayView.deinit();
+            mHdmiinStoped = true;
             stopHdmiInSizeTimer();
             isShowingOnGraphic = false;
             mIsFloating = false;
@@ -394,7 +455,7 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
         mQuitBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                stopHdmiin();
+                stopHdmiin(true);
             }
         });
 
@@ -537,18 +598,27 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
                 public void handleMessage(Message msg) {
                     if (mHdmiInSizeTimer == null || mHdmiInSizeTask == null)
                         return;
+                    if (mOverlayView == null)
+                        return;
 
-                    if (mOverlayView != null && mSurfaceCreated) {
-                        boolean enabled = mOverlayView.isEnable();
-                        Log.d(TAG, "startHdmiInSizeTimer(), enabled: " + enabled);
-                        boolean plugged = mOverlayView.hdmiPlugged();
-                        Log.d(TAG, "startHdmiInSizeTimer(), plugged: " + plugged);
-                        boolean signal = mOverlayView.hdmiSignal();
-                        Log.d(TAG, "startHdmiInSizeTimer(), signal: " + signal);
+                    boolean enabled = mOverlayView.isEnable();
+                    boolean plugged = mOverlayView.hdmiPlugged();
+                    boolean signal = mOverlayView.hdmiSignal();
+                    Log.d(TAG, "startHdmiInSizeTimer(), mSurfaceCreated: " + mSurfaceCreated + ", mHdmiPlugged: " + mHdmiPlugged + ", enabled: " + enabled + ", plugged: " + plugged + ", signal: " + signal);
+
+                    if (!mHdmiPlugged && enabled && plugged && signal) {
+                        if (!mSurfaceCreated) {
+                            mOverlayView.setVisibility(View.VISIBLE);
+                        }
+                    }
+                    if (!isSurfaceAvailable())
+                        return;
+
+                    if (mSurfaceCreated) {
                         if (!enabled || !plugged) {
                             if (mHdmiInStatus == HDMI_IN_START && mHdmiPlugged) {
-                                Log.d(TAG, "startHdmiInSizeTimer(), HDMI_IN_STOP, SHOW_BLACK, EXIT");
-                                Message message = mHandler.obtainMessage(HDMI_IN_STOP, SHOW_BLACK, EXIT);
+                                Log.d(TAG, "startHdmiInSizeTimer(), HDMI_IN_STOP, SHOW_BLACK");
+                                Message message = mHandler.obtainMessage(HDMI_IN_STOP, SHOW_BLACK, 0);
                                 mHandler.sendMessageDelayed(message, 0);
                                 mHdmiPlugged = false;
                             }
@@ -593,14 +663,14 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
                                     mHdmiPlugged = true;
 
                                 if (width > 0 && height > 0) {
-                                    if (mHdmiInWidth != width || mHdmiInHeight != height || mHdmiInInterlace != interlace || mHdmiInHz != hz) {
+                                    if (mHdmiInWidth != width || mHdmiInHeight != height || mHdmiInInterlace != interlace || mHdmiInHz != hz || mHdmiinStoped) {
                                         int flag = STOP_MOV;
                                         if (mHdmiInWidth == 0 && mHdmiInHeight == 0 && mHdmiInInterlace == -1 && mHdmiInHz == -1)
                                             flag = START_MOV;
 
                                         Log.d(TAG, "startHdmiInSizeTimer(), stopAudioHandleTimer");
                                         stopAudioHandleTimer();
-                                        if (flag == STOP_MOV) {
+                                        if (flag == STOP_MOV && !mHdmiinStoped) {
                                             mOverlayView.displayPip(0, 0, 0, 0);
                                             mOverlayView.invalidate();
                                             mOverlayView.stopMov();
@@ -619,8 +689,7 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
                                         Log.d(TAG, "startHdmiInSizeTimer(), enableAudio 1");
                                         mOverlayView.enableAudio(1);
                                         Log.d(TAG, "startHdmiInSizeTimer(), HDMI_IN_START");
-                                        Message message = mHandler.obtainMessage(HDMI_IN_START, flag, 0);
-                                        mHandler.sendMessageDelayed(message, 500);
+                                        sendStartMessage(flag, 0, 500);
                                     }
                                 }
                             }

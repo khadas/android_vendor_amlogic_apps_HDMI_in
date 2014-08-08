@@ -4,6 +4,9 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.PixelFormat;
+import android.graphics.Canvas;
+import android.graphics.PorterDuff;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -58,8 +61,8 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
     private Timer mHdmiInSizeTimer = null;
     private Handler mHdmiInSizeHandler = null;
     private boolean mHdmiPlugged = false;
-
     private TimerTask mAudioTask = null;
+    private boolean mHdmiinStoped = false;
     private Timer mAudioTimer = null;
     private Handler mAudioHandler = null;
     private final int HDMI_IN_START = 0x10001;
@@ -107,6 +110,7 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
         mAudioManager = (AudioManager)mContext.getSystemService(Context.AUDIO_SERVICE);
         Log.d(TAG, "onCreate(), mbx.hdmiin.vol: 15");
         SystemProperties.set(VOLUME_PROP, "15");
+        mHdmiinStoped = false;
 
         mPipBtn = (Button)findViewById(R.id.pip);
 
@@ -127,6 +131,8 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
             public void onClick(View v) {
                 Log.d(TAG, "mQuitBtn onClick(), stopAudioHandleTimer");
                 stopAudioHandleTimer();
+                Log.d(TAG, "mQuitBtn, onClick(), setVisibility INVISIBLE");
+                mOverlayView.setVisibility(View.INVISIBLE);
                 Log.d(TAG, "mQuitBtn onClick(), stopHdmiInSizeTimer");
                 stopHdmiInSizeTimer();
                 if (mHdmiPlugged) {
@@ -136,6 +142,7 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                     mOverlayView.stopMov();
                 }
                 mOverlayView.deinit();
+                mHdmiinStoped = true;
                 mHdmiPlugged = false;
 
                 Log.d(TAG, "mQuitBtn onClick(), finish");
@@ -208,6 +215,30 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
         }
     };
 
+    @Override
+    protected void onPause() {
+        Log.d(TAG, "onPause");
+        if (mOverlayView != null && !mHdmiinStoped) {
+            Log.d(TAG, "onPause, stopAudioHandleTimer");
+            stopAudioHandleTimer();
+            Log.d(TAG, "onPause, setVisibility INVISIBLE");
+            mOverlayView.setVisibility(View.INVISIBLE);
+            Log.d(TAG, "onPause, stopHdmiInSizeTimer");
+            stopHdmiInSizeTimer();
+            if (mHdmiPlugged) {
+                mOverlayView.displayPip(0, 0, 0, 0);
+                mOverlayView.invalidate();
+                Log.d(TAG, "onPause, stopMov");
+                mOverlayView.stopMov();
+            }
+            mOverlayView.deinit();
+            mHdmiinStoped = true;
+            mHdmiPlugged = false;
+        }
+
+        super.onPause();
+    }
+
     private void startAudioHandleTimer() {
         if (mAudioHandler == null) {
             mAudioHandler = new Handler() {
@@ -272,6 +303,12 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
         }
     }
 
+    private boolean isSurfaceAvailable() {
+        if (mSurfaceHolder == null)
+            return false;
+        return mOverlayView.isSurfaceAvailable(mSurfaceHolder.getSurface());
+    }
+
     private void startHdmiInSizeTimer() {
         if (mHdmiInSizeHandler == null) {
             mHdmiInSizeHandler = new Handler() {
@@ -279,18 +316,28 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                 public void handleMessage(Message msg) {
                     if (mHdmiInSizeTimer == null || mHdmiInSizeTask == null)
                         return;
+                    if (mOverlayView == null)
+                        return;
 
-                    if (mOverlayView != null && mSurfaceCreated) {
-                        boolean enabled = mOverlayView.isEnable();
-                        Log.d(TAG, "startHdmiInSizeTimer(), enabled: " + enabled);
-                        boolean plugged = mOverlayView.hdmiPlugged();
-                        Log.d(TAG, "startHdmiInSizeTimer(), plugged: " + plugged);
-                        boolean signal = mOverlayView.hdmiSignal();
-                        Log.d(TAG, "startHdmiInSizeTimer(), signal: " + signal);
+                    boolean enabled = mOverlayView.isEnable();
+                    boolean plugged = mOverlayView.hdmiPlugged();
+                    boolean signal = mOverlayView.hdmiSignal();
+                    Log.d(TAG, "startHdmiInSizeTimer(), mSurfaceCreated: " + mSurfaceCreated + ", mHdmiPlugged: " + mHdmiPlugged + ", enabled: " + enabled + ", plugged: " + plugged + ", signal: " + signal);
+
+                    if (!mHdmiPlugged && enabled && plugged && signal) {
+                        if (!mSurfaceCreated) {
+                            Log.d(TAG, "startHdmiInSizeTimer, setVisibility VISIBLE");
+                            mOverlayView.setVisibility(View.VISIBLE);
+                        }
+                    }
+                    if (!isSurfaceAvailable())
+                        return;
+
+                    if (mSurfaceCreated) {
                         if (!enabled || !plugged) {
                             if (mHdmiInStatus == HDMI_IN_START && mHdmiPlugged) {
-                                Log.d(TAG, "startHdmiInSizeTimer(), HDMI_IN_STOP, SHOW_BLACK, EXIT");
-                                Message message = mHandler.obtainMessage(HDMI_IN_STOP, SHOW_BLACK, EXIT);
+                                Log.d(TAG, "startHdmiInSizeTimer(), HDMI_IN_STOP, SHOW_BLACK");
+                                Message message = mHandler.obtainMessage(HDMI_IN_STOP, SHOW_BLACK, 0);
                                 mHandler.sendMessageDelayed(message, 0);
                                 mHdmiPlugged = false;
                             }
@@ -335,18 +382,19 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                                     mHdmiPlugged = true;
 
                                 if (width > 0 && height > 0) {
-                                    if (mHdmiInWidth != width || mHdmiInHeight != height || mHdmiInInterlace != interlace || mHdmiInHz != hz) {
+                                    if (mHdmiInWidth != width || mHdmiInHeight != height || mHdmiInInterlace != interlace || mHdmiInHz != hz || mHdmiinStoped) {
                                         int flag = STOP_MOV;
                                         if (mHdmiInWidth == 0 && mHdmiInHeight == 0 && mHdmiInInterlace == -1 && mHdmiInHz == -1)
                                             flag = START_MOV;
 
                                         Log.d(TAG, "startHdmiInSizeTimer(), stopAudioHandleTimer");
                                         stopAudioHandleTimer();
-                                        if (flag == STOP_MOV) {
+                                        if (flag == STOP_MOV && !mHdmiinStoped) {
                                             mOverlayView.displayPip(0, 0, 0, 0);
                                             mOverlayView.invalidate();
                                             mOverlayView.stopMov();
                                             mOverlayView.setEnable(false);
+                                            Log.d(TAG, "startHdmiInSizeTimer, setVisibility INVISIBLE");
                                             mOverlayView.setVisibility(View.INVISIBLE);
                                         } else
                                             mOverlayView.setEnable(true);
@@ -411,12 +459,15 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
 
     private void startPip() {
         Log.d(TAG, "startPip()");
+        Log.d(TAG, "startPip(), setVisibility INVISIBLE");
+        mOverlayView.setVisibility(View.INVISIBLE);
         if (mHdmiPlugged) {
             mOverlayView.displayPip(0, 0, 0, 0);
             mOverlayView.invalidate();
             mOverlayView.stopMov();
         }
         mOverlayView.deinit();
+        mHdmiinStoped = true;
         stopHdmiInSizeTimer();
         mSurfaceCreated = false;
 
@@ -455,7 +506,10 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                     {
                         Log.d(TAG, "HDMI_IN_START");
                         mHdmiInStatus = HDMI_IN_START;
+                        if (mHdmiinStoped)
+                            mHdmiinStoped = false;
                         if (msg.arg1 == STOP_MOV) {
+                            Log.d(TAG, "HDMI_IN_START, setVisibility VISIBLE");
                             mOverlayView.setVisibility(View.VISIBLE);
                             mOverlayView.setEnable(true);
                         }
@@ -478,8 +532,10 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                         Log.d(TAG, "HDMI_IN_STOP, stopHdmiInSizeTimer");
                         stopHdmiInSizeTimer();
                     }
-                    if (msg.arg1 == SHOW_BLACK && mSurfaceHolder != null)
+                    if (msg.arg1 == SHOW_BLACK && mSurfaceHolder != null) {
+                        Log.d(TAG, "HDMI_IN_STOP, setVisibility INVISIBLE");
                         mOverlayView.setVisibility(View.INVISIBLE);
+                    }
                     Log.d(TAG, "HDMI_IN_STOP, stopAudioHandleTimer");
                     stopAudioHandleTimer();
                     mOverlayView.displayPip(0, 0, 0, 0);
@@ -491,6 +547,7 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                     mHdmiInHz = -1;
                     if (msg.arg2 == EXIT) {
                         mOverlayView.deinit();
+                        mHdmiinStoped = true;
                         finish();
                     }
                 }
@@ -507,11 +564,19 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
         Log.d(TAG, "surfaceCreated()");
+        if (holder != null) {
+            Canvas canvas = holder.lockCanvas();
+            Log.d(TAG, "surfaceCreated(), drawColor TRANSPARENT");
+            canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR);
+            holder.unlockCanvasAndPost(canvas);
+        } else
+            Log.d(TAG, "surfaceCreated(), holder == null");
         mSurfaceCreated = true;
     }
 
     @Override
     public void surfaceDestroyed(SurfaceHolder holder) {
         Log.d(TAG, "surfaceDestroyed()");
+        mSurfaceCreated = false;
     }
 }

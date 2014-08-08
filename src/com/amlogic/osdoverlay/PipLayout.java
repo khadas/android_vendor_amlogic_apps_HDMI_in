@@ -24,7 +24,7 @@ public class PipLayout extends RelativeLayout {
             return true;
         } else if (mKeycodeBackDown && KeyEvent.KEYCODE_BACK == event.getKeyCode() && KeyEvent.ACTION_UP == event.getAction()) {
             mKeycodeBackDown = false;
-            ((FloatWindowService)mContext).stopHdmiin();
+            ((FloatWindowService)mContext).stopHdmiin(true);
             return true;
         }
         if (KeyEvent.KEYCODE_F10 == event.getKeyCode() && KeyEvent.ACTION_DOWN == event.getAction()) {
