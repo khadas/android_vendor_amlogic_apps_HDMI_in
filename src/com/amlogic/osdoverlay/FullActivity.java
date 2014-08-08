@@ -428,18 +428,18 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
     }
 
     @Override
-    public boolean onKeyDown(int keyCode, KeyEvent event) 
+    public boolean onKeyUp(int keyCode, KeyEvent event) 
     {
-        if(keyCode == KeyEvent.KEYCODE_BACK)
+        if (keyCode == KeyEvent.KEYCODE_BACK)
         {
-            if(event.getAction() == KeyEvent.ACTION_DOWN)
+            if (event.getAction() == KeyEvent.ACTION_UP)
             {
                 startPip();
                 finish();
             }
         }
 
-        return super.onKeyDown(keyCode, event);
+        return super.onKeyUp(keyCode, event);
     }
 
     private Handler mHandler = new Handler()
