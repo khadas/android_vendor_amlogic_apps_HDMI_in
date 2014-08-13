@@ -119,8 +119,8 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
                         isShowingOnGraphic = true;
                         if (mSurfaceHolder != null) {
                             Surface sur = mSurfaceHolder.getSurface();
-                            mOverlayView.setPreviewWindow(sur);
-                            mOverlayView.startMov();
+                            if (mOverlayView.setPreviewWindow(sur))
+                                mOverlayView.startMov();
                             mFullBtn.setOnClickListener(mFullBtnListener);
                         }
                     }

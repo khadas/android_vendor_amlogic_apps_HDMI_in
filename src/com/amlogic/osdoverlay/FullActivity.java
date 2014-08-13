@@ -485,8 +485,11 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
         {
             if (event.getAction() == KeyEvent.ACTION_UP)
             {
+                Log.d(TAG, "onKeyUp(), stopAudioHandleTimer");
+                stopAudioHandleTimer();
                 startPip();
                 finish();
+                return true;
             }
         }
 
@@ -519,8 +522,8 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                         mOverlayView.invalidate();
                         if (mSurfaceHolder != null) {
                             Surface sur = mSurfaceHolder.getSurface();
-                            mOverlayView.setPreviewWindow(sur);
-                            mOverlayView.startMov();
+                            if (mOverlayView.setPreviewWindow(sur))
+                                mOverlayView.startMov();
                             mPipBtn.setOnClickListener(mPipBtnListener);
                         }
                     }
