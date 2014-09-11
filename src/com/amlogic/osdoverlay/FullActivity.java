@@ -72,9 +72,11 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
     private final int SHOW_BLACK = 3;
     private final int EXIT = 4;
     private int mHdmiInStatus = HDMI_IN_STOP;
+    private boolean mStartSent = false;
     private AudioManager mAudioManager;
     private boolean mAudioDeviceConnected = false;
     private static final String VOLUME_PROP = "mbx.hdmiin.vol";
+    private static final String MUTE_PROP = "sys.hdmiin.mute";
     private boolean mAudioRequested = false;
 
     private Button.OnClickListener mPipBtnListener = new Button.OnClickListener() {
@@ -142,6 +144,7 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                     mOverlayView.stopMov();
                 }
                 mOverlayView.deinit();
+                SystemProperties.set(MUTE_PROP, "false");
                 mHdmiinStoped = true;
                 mHdmiPlugged = false;
 
@@ -218,7 +221,12 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
     @Override
     protected void onPause() {
         Log.d(TAG, "onPause");
-        if (mOverlayView != null && !mHdmiinStoped) {
+        if (mOverlayView != null && (!mHdmiinStoped || mStartSent)) {
+            if (mStartSent) {
+                Log.d(TAG, "onPause, mStartSent");
+                mHandler.removeMessages(HDMI_IN_START);
+                mStartSent = false;
+            }
             Log.d(TAG, "onPause, stopAudioHandleTimer");
             stopAudioHandleTimer();
             Log.d(TAG, "onPause, setVisibility INVISIBLE");
@@ -232,6 +240,7 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                 mOverlayView.stopMov();
             }
             mOverlayView.deinit();
+            SystemProperties.set(MUTE_PROP, "false");
             mHdmiinStoped = true;
             mHdmiPlugged = false;
         }
@@ -364,6 +373,12 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                             if (hdmiInSize.length == 1)
                                 invalidMode = true;
                         }
+                        if (invalidMode) {
+                            mHdmiInWidth = 0;
+                            mHdmiInHeight = 0;
+                            mHdmiInInterlace = -1;
+                            mHdmiInHz = -1;
+                        }
                         if (!invalidMode) {
                             String mode = hdmiInSize[1];
                             for (int i = 0; i < MODES.length; i++) {
@@ -393,11 +408,11 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                                             mOverlayView.displayPip(0, 0, 0, 0);
                                             mOverlayView.invalidate();
                                             mOverlayView.stopMov();
-                                            mOverlayView.setEnable(false);
+                                            // mOverlayView.setEnable(false);
                                             Log.d(TAG, "startHdmiInSizeTimer, setVisibility INVISIBLE");
                                             mOverlayView.setVisibility(View.INVISIBLE);
-                                        } else
-                                            mOverlayView.setEnable(true);
+                                        }
+                                        mOverlayView.setEnable(true);
 
                                         mHdmiInWidth = width;
                                         mHdmiInHeight = height;
@@ -410,12 +425,25 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                                         Log.d(TAG, "startHdmiInSizeTimer(), HDMI_IN_START");
                                         Message message = mHandler.obtainMessage(HDMI_IN_START, flag, 0);
                                         mHandler.sendMessageDelayed(message, 500);
+                                        mStartSent = true;
                                     }
                                 }
                             }
                         } else if (invalidMode && (!plugged || !signal)) {
                             if (mHdmiInStatus == HDMI_IN_START) {
                                 Log.d(TAG, "startHdmiInSizeTimer(), HDMI_IN_STOP, SHOW_BLACK");
+                                Message message = mHandler.obtainMessage(HDMI_IN_STOP, SHOW_BLACK, 0);
+                                mHandler.sendMessageDelayed(message, 0);
+                                mHdmiPlugged = false;
+                            }
+                        } else if (invalidMode) {
+                            if (mStartSent) {
+                                Log.d(TAG, "startHdmiInSizeTimer, mStartSent");
+                                mHandler.removeMessages(HDMI_IN_START);
+                                mStartSent = false;
+                            }
+                            if (mHdmiInStatus != HDMI_IN_STOP) {
+                                Log.d(TAG, "startHdmiInSizeTimer(), invalidMode, HDMI_IN_STOP, SHOW_BLACK");
                                 Message message = mHandler.obtainMessage(HDMI_IN_STOP, SHOW_BLACK, 0);
                                 mHandler.sendMessageDelayed(message, 0);
                                 mHdmiPlugged = false;
@@ -467,6 +495,7 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
             mOverlayView.stopMov();
         }
         mOverlayView.deinit();
+        SystemProperties.set(MUTE_PROP, "false");
         mHdmiinStoped = true;
         stopHdmiInSizeTimer();
         mSurfaceCreated = false;
@@ -485,10 +514,12 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
         {
             if (event.getAction() == KeyEvent.ACTION_UP)
             {
-                Log.d(TAG, "onKeyUp(), stopAudioHandleTimer");
-                stopAudioHandleTimer();
-                startPip();
-                finish();
+                if (mHdmiInStatus == HDMI_IN_START) {
+                    Log.d(TAG, "onKeyUp(), stopAudioHandleTimer");
+                    stopAudioHandleTimer();
+                    startPip();
+                    finish();
+                }
                 return true;
             }
         }
@@ -509,13 +540,15 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                     {
                         Log.d(TAG, "HDMI_IN_START");
                         mHdmiInStatus = HDMI_IN_START;
+                        mStartSent = false;
+                        removeMessages(HDMI_IN_START);
                         if (mHdmiinStoped)
                             mHdmiinStoped = false;
                         if (msg.arg1 == STOP_MOV) {
                             Log.d(TAG, "HDMI_IN_START, setVisibility VISIBLE");
                             mOverlayView.setVisibility(View.VISIBLE);
-                            mOverlayView.setEnable(true);
                         }
+                        mOverlayView.setEnable(true);
 
                         Log.d(TAG, "width: " + mHdmiInWidth + ", height: " + mHdmiInHeight);
                         mOverlayView.displayPip(0, 0, mHdmiInWidth, mHdmiInHeight);
@@ -531,6 +564,11 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                 case HDMI_IN_STOP: {
                     Log.d(TAG, "HDMI_IN_STOP");
                     mHdmiInStatus = HDMI_IN_STOP;
+                    if (mStartSent) {
+                        Log.d(TAG, "HDMI_IN_STOP, mStartSent");
+                        mHandler.removeMessages(HDMI_IN_START);
+                        mStartSent = false;
+                    }
                     if (msg.arg2 == EXIT) {
                         Log.d(TAG, "HDMI_IN_STOP, stopHdmiInSizeTimer");
                         stopHdmiInSizeTimer();
@@ -550,6 +588,7 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                     mHdmiInHz = -1;
                     if (msg.arg2 == EXIT) {
                         mOverlayView.deinit();
+                        SystemProperties.set(MUTE_PROP, "false");
                         mHdmiinStoped = true;
                         finish();
                     }

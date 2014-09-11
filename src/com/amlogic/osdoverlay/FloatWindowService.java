@@ -52,6 +52,7 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
     private SurfaceHolder mSurfaceHolder = null;
     private boolean mSurfaceCreated = false;
     private int mHdmiInStatus = HDMI_IN_STOP;
+    private boolean mStartSent = false;
 
     public static boolean mIsFloating = false;
 
@@ -91,6 +92,7 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
     private AudioManager mAudioManager;
     private boolean mAudioDeviceConnected = false;
     private static final String VOLUME_PROP = "mbx.hdmiin.vol";
+    private static final String MUTE_PROP = "sys.hdmiin.mute";
     private boolean mAudioRequested = false;
 
     private Handler mHandler = new Handler() {
@@ -102,12 +104,14 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
                 case HDMI_IN_START:
                     Log.d(TAG, "HDMI_IN_START");
                     mHdmiInStatus = HDMI_IN_START;
+                    mStartSent = false;
+                    removeMessages(HDMI_IN_START);
                     if (mHdmiinStoped)
                         mHdmiinStoped = false;
                     if (msg.arg1 == STOP_MOV) {
                         mOverlayView.setVisibility(View.VISIBLE);
-                        mOverlayView.setEnable(true);
                     }
+                    mOverlayView.setEnable(true);
                     int width = mOverlayView.getWidth();
                     int height = mOverlayView.getHeight();
                     Log.d(TAG, "HDMI_IN_START, width: " + width + ", height: " + height);
@@ -128,6 +132,11 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
                 case HDMI_IN_STOP: {
                     Log.d(TAG, "HDMI_IN_STOP");
                     mHdmiInStatus = HDMI_IN_STOP;
+                    if (mStartSent) {
+                        Log.d(TAG, "HDMI_IN_STOP, mStartSent");
+                        mHandler.removeMessages(HDMI_IN_START);
+                        mStartSent = false;
+                    }
                     if (msg.arg2 == EXIT) {
                         Log.d(TAG, "HDMI_IN_STOP, stopHdmiInSizeTimer");
                         stopHdmiInSizeTimer();
@@ -146,6 +155,7 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
                     if (msg.arg2 == EXIT) {
                         hidePipWindow();
                         mOverlayView.deinit();
+                        SystemProperties.set(MUTE_PROP, "false");
                         mHdmiinStoped = true;
                         mIsFloating = false;
                     }
@@ -175,6 +185,7 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
             }
             isShowingOnGraphic = false;
             mOverlayView.deinit();
+            SystemProperties.set(MUTE_PROP, "false");
             mHdmiinStoped = true;
             stopHdmiInSizeTimer();
             mSurfaceCreated = false;
@@ -218,6 +229,7 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
     private void sendStartMessage(int arg1, int arg2, long delayMillis) {
         Message message = mHandler.obtainMessage(HDMI_IN_START, arg1, arg2);
         mHandler.sendMessageDelayed(message, delayMillis);
+        mStartSent = true;
     }
 
     private boolean isSurfaceAvailable() {
@@ -233,11 +245,11 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
             mOverlayView.displayPip(0, 0, 0, 0);
             mOverlayView.invalidate();
             mOverlayView.stopMov();
-            mOverlayView.setEnable(false);
+            // mOverlayView.setEnable(false);
             isShowingOnGraphic = false;
             mOverlayView.setVisibility(View.INVISIBLE);
-        } else
-            mOverlayView.setEnable(true);
+        }
+        mOverlayView.setEnable(true);
 
         Log.d(TAG, "startHdmiin(), startAudioHandleTimer");
         startAudioHandleTimer();
@@ -282,6 +294,7 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
         }
         Log.d(TAG, "stopHdmiin, deinit");
         mOverlayView.deinit();
+        SystemProperties.set(MUTE_PROP, "false");
         mHdmiinStoped = true;
         isShowingOnGraphic = false;
         mIsFloating = false;
@@ -302,9 +315,14 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
                     } else if (action.equals(HDMIIN_PIP_FOCUS)) {
                         updateViewFocusable(true);
                     } else if (action.equals(HDMIIN_PAUSE)) {
-                        if (!mHdmiinStoped)
+                        if (!mHdmiinStoped || mStartSent) {
+                            if (mStartSent) {
+                                Log.d(TAG, "onReceive, mStartSent");
+                                mHandler.removeMessages(HDMI_IN_START);
+                                mStartSent = false;
+                            }
                             stopHdmiin(false);
-                        else
+                        } else
                             showPipWindow();
                     }
                 }
@@ -350,6 +368,7 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
                 mOverlayView.stopMov();
             }
             mOverlayView.deinit();
+            SystemProperties.set(MUTE_PROP, "false");
             mHdmiinStoped = true;
             stopHdmiInSizeTimer();
             isShowingOnGraphic = false;
@@ -645,6 +664,12 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
                             if (hdmiInSize.length == 1)
                                 invalidMode = true;
                         }
+                        if (invalidMode) {
+                            mHdmiInWidth = 0;
+                            mHdmiInHeight = 0;
+                            mHdmiInInterlace = -1;
+                            mHdmiInHz = -1;
+                        }
                         if (!invalidMode) {
                             String mode = hdmiInSize[1];
                             for (int i = 0; i < FullActivity.MODES.length; i++) {
@@ -674,11 +699,11 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
                                             mOverlayView.displayPip(0, 0, 0, 0);
                                             mOverlayView.invalidate();
                                             mOverlayView.stopMov();
-                                            mOverlayView.setEnable(false);
+                                            // mOverlayView.setEnable(false);
                                             isShowingOnGraphic = false;
                                             mOverlayView.setVisibility(View.INVISIBLE);
-                                        } else
-                                            mOverlayView.setEnable(true);
+                                        }
+                                        mOverlayView.setEnable(true);
 
                                         mHdmiInWidth = width;
                                         mHdmiInHeight = height;
@@ -696,6 +721,18 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
                         } else if (invalidMode && (!plugged || !signal)) {
                             if (mHdmiInStatus == HDMI_IN_START) {
                                 Log.d(TAG, "startHdmiInSizeTimer(), HDMI_IN_STOP, SHOW_BLACK");
+                                Message message = mHandler.obtainMessage(HDMI_IN_STOP, SHOW_BLACK, 0);
+                                mHandler.sendMessageDelayed(message, 0);
+                                mHdmiPlugged = false;
+                            }
+                        } else if (invalidMode) {
+                            if (mStartSent) {
+                                Log.d(TAG, "startHdmiInSizeTimer, mStartSent");
+                                mHandler.removeMessages(HDMI_IN_START);
+                                mStartSent = false;
+                            }
+                            if (mHdmiInStatus != HDMI_IN_STOP) {
+                                Log.d(TAG, "startHdmiInSizeTimer(), invalidMode, HDMI_IN_STOP, SHOW_BLACK");
                                 Message message = mHandler.obtainMessage(HDMI_IN_STOP, SHOW_BLACK, 0);
                                 mHandler.sendMessageDelayed(message, 0);
                                 mHdmiPlugged = false;
