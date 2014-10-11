@@ -15,6 +15,7 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
 import android.os.SystemProperties;
+import android.os.PowerManager;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
@@ -94,6 +95,7 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
     private static final String VOLUME_PROP = "mbx.hdmiin.vol";
     private static final String MUTE_PROP = "sys.hdmiin.mute";
     private boolean mAudioRequested = false;
+    private PowerManager.WakeLock mScreenLock = null;
 
     private Handler mHandler = new Handler() {
         @Override
@@ -193,9 +195,20 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
             mIsFloating = false;
             Log.d(TAG, "mFullBtn, stop FloatWindowService");
             mContext.stopService(new Intent(mContext, FloatWindowService.class));
+            openScreenOffTimeout();
             mContext.startActivity(intent);
         }
     };
+
+    private void closeScreenOffTimeout() {
+        if(mScreenLock.isHeld() == false)
+            mScreenLock.acquire();
+    }
+    
+    private void openScreenOffTimeout() {
+        if(mScreenLock.isHeld() == true)
+            mScreenLock.release();
+    }
 
     @Override
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
@@ -301,6 +314,7 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
         if (stopService) {
             Log.d(TAG, "stopHdmiin, stop FloatWindowService");
             mContext.stopService(new Intent(mContext, FloatWindowService.class));
+            openScreenOffTimeout();
         }
     }
 
@@ -345,6 +359,8 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
         SystemProperties.set(VOLUME_PROP, "15");
         mLayout = null;
         mHdmiinStoped = false;
+        mScreenLock = ((PowerManager)mContext.getSystemService(Context.POWER_SERVICE))
+            .newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK | PowerManager.ON_AFTER_RELEASE, TAG);
         showPipWindow();
         return super.onStartCommand(intent, flags, startId);
     }
@@ -479,8 +495,9 @@ public class FloatWindowService extends Service implements SurfaceHolder.Callbac
         });
 
         mFullBtn.requestFocus();
+        closeScreenOffTimeout();
         if (mOverlayView != null) {
-            mOverlayView.init(mInputSource);
+            mOverlayView.init(mInputSource, false);
         }
         mHdmiPlugged = false;
         startHdmiInSizeTimer();

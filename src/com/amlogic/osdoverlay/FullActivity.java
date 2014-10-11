@@ -11,6 +11,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.os.SystemProperties;
+import android.os.PowerManager;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.Surface;
@@ -78,6 +79,8 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
     private static final String VOLUME_PROP = "mbx.hdmiin.vol";
     private static final String MUTE_PROP = "sys.hdmiin.mute";
     private boolean mAudioRequested = false;
+    private static boolean mUseVideoLayer  = true;
+    private PowerManager.WakeLock mScreenLock = null;
 
     private Button.OnClickListener mPipBtnListener = new Button.OnClickListener() {
         @Override
@@ -88,6 +91,16 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
             finish();
         }
     };
+
+    private void closeScreenOffTimeout() {
+        if(mScreenLock.isHeld() == false)
+            mScreenLock.acquire();
+    }
+    
+    private void openScreenOffTimeout() {
+        if(mScreenLock.isHeld() == true)
+            mScreenLock.release();
+    }
 
     @Override
     public void onCreate(Bundle savedInstanceState) 
@@ -104,9 +117,14 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
 
         setContentView(R.layout.activity_full);
 
+        mScreenLock = ((PowerManager)mContext.getSystemService(Context.POWER_SERVICE))
+            .newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK | PowerManager.ON_AFTER_RELEASE, TAG);
         mSurfaceCreated = false;
         mOverlayView = (OverlayView)findViewById(R.id.surfaceview);
         mSurfaceHolder = mOverlayView.getHolder();
+        mUseVideoLayer  = SystemProperties.getBoolean("mbx.hdmiin.videolayer", true);
+        if (mUseVideoLayer)
+            mSurfaceHolder.setFormat(PixelFormat.VIDEO_HOLE_REAL);
         mSurfaceHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
         mSurfaceHolder.addCallback(this);
         mAudioManager = (AudioManager)mContext.getSystemService(Context.AUDIO_SERVICE);
@@ -138,10 +156,14 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                 Log.d(TAG, "mQuitBtn onClick(), stopHdmiInSizeTimer");
                 stopHdmiInSizeTimer();
                 if (mHdmiPlugged) {
-                    mOverlayView.displayPip(0, 0, 0, 0);
-                    mOverlayView.invalidate();
-                    Log.d(TAG, "mQuitBtn onClick(), stopMov");
-                    mOverlayView.stopMov();
+                    if (mUseVideoLayer) {
+                        mOverlayView.stopVideo();
+                    } else {
+                        mOverlayView.displayPip(0, 0, 0, 0);
+                        mOverlayView.invalidate();
+                        Log.d(TAG, "mQuitBtn onClick(), stopMov");
+                        mOverlayView.stopMov();
+                    }
                 }
                 mOverlayView.deinit();
                 SystemProperties.set(MUTE_PROP, "false");
@@ -160,9 +182,10 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
         super.onResume();
 
         if (mOverlayView != null) {
+            closeScreenOffTimeout();
             mHdmiPlugged = false;
             Log.d(TAG, "onResume(), init");
-            mOverlayView.init(mInputSource);
+            mOverlayView.init(mInputSource, true);
             startHdmiInSizeTimer();
         }
     }
@@ -234,15 +257,20 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
             Log.d(TAG, "onPause, stopHdmiInSizeTimer");
             stopHdmiInSizeTimer();
             if (mHdmiPlugged) {
-                mOverlayView.displayPip(0, 0, 0, 0);
-                mOverlayView.invalidate();
-                Log.d(TAG, "onPause, stopMov");
-                mOverlayView.stopMov();
+                if (mUseVideoLayer) {
+                    mOverlayView.stopVideo();
+                } else {
+                    mOverlayView.displayPip(0, 0, 0, 0);
+                    mOverlayView.invalidate();
+                    Log.d(TAG, "onPause, stopMov");
+                    mOverlayView.stopMov();
+                }
             }
             mOverlayView.deinit();
             SystemProperties.set(MUTE_PROP, "false");
             mHdmiinStoped = true;
             mHdmiPlugged = false;
+            openScreenOffTimeout();
         }
 
         super.onPause();
@@ -405,9 +433,13 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                                         Log.d(TAG, "startHdmiInSizeTimer(), stopAudioHandleTimer");
                                         stopAudioHandleTimer();
                                         if (flag == STOP_MOV && !mHdmiinStoped) {
-                                            mOverlayView.displayPip(0, 0, 0, 0);
-                                            mOverlayView.invalidate();
-                                            mOverlayView.stopMov();
+                                            if (mUseVideoLayer) {
+                                                mOverlayView.stopVideo();
+                                            } else {
+                                                mOverlayView.displayPip(0, 0, 0, 0);
+                                                mOverlayView.invalidate();
+                                                mOverlayView.stopMov();
+                                            }
                                             // mOverlayView.setEnable(false);
                                             Log.d(TAG, "startHdmiInSizeTimer, setVisibility INVISIBLE");
                                             mOverlayView.setVisibility(View.INVISIBLE);
@@ -490,9 +522,13 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
         Log.d(TAG, "startPip(), setVisibility INVISIBLE");
         mOverlayView.setVisibility(View.INVISIBLE);
         if (mHdmiPlugged) {
-            mOverlayView.displayPip(0, 0, 0, 0);
-            mOverlayView.invalidate();
-            mOverlayView.stopMov();
+            if (mUseVideoLayer) {
+                mOverlayView.stopVideo();
+            } else {
+                mOverlayView.displayPip(0, 0, 0, 0);
+                mOverlayView.invalidate();
+                mOverlayView.stopMov();
+            }
         }
         mOverlayView.deinit();
         SystemProperties.set(MUTE_PROP, "false");
@@ -555,8 +591,12 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                         mOverlayView.invalidate();
                         if (mSurfaceHolder != null) {
                             Surface sur = mSurfaceHolder.getSurface();
-                            if (mOverlayView.setPreviewWindow(sur))
-                                mOverlayView.startMov();
+                            if (mUseVideoLayer) {
+                                mOverlayView.startVideo();
+                            } else {
+                                if (mOverlayView.setPreviewWindow(sur))
+                                    mOverlayView.startMov();
+                            }
                             mPipBtn.setOnClickListener(mPipBtnListener);
                         }
                     }
@@ -579,9 +619,13 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
                     }
                     Log.d(TAG, "HDMI_IN_STOP, stopAudioHandleTimer");
                     stopAudioHandleTimer();
-                    mOverlayView.displayPip(0, 0, 0, 0);
-                    mOverlayView.invalidate();
-                    mOverlayView.stopMov();
+                    if (mUseVideoLayer) {
+                        mOverlayView.stopVideo();
+                    } else {
+                        mOverlayView.displayPip(0, 0, 0, 0);
+                        mOverlayView.invalidate();
+                        mOverlayView.stopMov();
+                    }
                     mHdmiInWidth = 0;
                     mHdmiInHeight = 0;
                     mHdmiInInterlace = -1;
