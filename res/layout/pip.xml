@@ -1,15 +1,15 @@
-<com.amlogic.osdoverlay.PipLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.droidlogic.hdmiin.PipLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/layout"
     android:layout_width="640dip"
     android:layout_height="480dip"
     android:background="#00000000"
    	>	
-    <OverlayView
+    <SurfaceView
     	android:id="@+id/surfaceview"
 		android:layout_width="match_parent"
 		android:layout_height="480dip"
         >
-    </OverlayView>
+    </SurfaceView>
    	
     <RelativeLayout 
         android:id="@+id/top_layout"
@@ -41,4 +41,4 @@
             >
         </Button>
     </RelativeLayout>
-</com.amlogic.osdoverlay.PipLayout>
+</com.droidlogic.hdmiin.PipLayout>

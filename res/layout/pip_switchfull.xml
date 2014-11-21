@@ -1,28 +1,22 @@
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.droidlogic.hdmiin.PipLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/layout"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
+    android:layout_width="wrap_content"
+    android:layout_height="80dip"
     android:background="#00000000"
    	>	
-    <SurfaceView
-    	android:id="@+id/surfaceview"
-		android:layout_width="match_parent"
-		android:layout_height="match_parent"
-        >
-    </SurfaceView>
    	
     <RelativeLayout 
         android:id="@+id/top_layout"
         android:layout_width="match_parent"
-        android:layout_height="@dimen/button_height"
+        android:layout_height="80dip"
         android:orientation="horizontal"
         android:layout_alignParentLeft="true"
         android:layout_alignParentBottom="true"
         >
         <Button
             android:id="@+id/pip"
-            android:layout_width="@dimen/button_width"
-            android:layout_height="@dimen/button_height"
+            android:layout_width="120dip"
+            android:layout_height="80dip"
             android:text="@string/pip"
             android:gravity="center"
             android:layout_marginRight="20dip"
@@ -32,14 +26,13 @@
         
         <Button
             android:id="@+id/quit"
-            android:layout_width="@dimen/button_width"
-            android:layout_height="@dimen/button_height"
+            android:layout_width="120dip"
+            android:layout_height="80dip"
             android:text="@string/quit"
             android:gravity="center"
             android:layout_marginRight="20dip"
             android:layout_alignParentRight="true"
             >
         </Button>
-
     </RelativeLayout>
-</RelativeLayout>
+</com.droidlogic.hdmiin.PipLayout>

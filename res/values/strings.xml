@@ -1,16 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">OSDOverlay</string>
-    <string name="settings_activity">HDMI IN</string>
+    <string name="app_name">Hdmi In</string>
+    <string name="settings_activity">HDMIIN</string>
     <string name="full_activity">FullActivity</string>
     <string name="pip_activity">PipActivity</string>
+    <string name="switchfull_activity">FullActivity</string>
     <string name="menu_settings">Settings</string>
     <string name="hdmi_in_settings">HDMI IN settings</string>
     <string name="hdmi_in_source_choose">Choose input source:</string>
-    <string name="hdmi_in_3">HDMI 3</string>
-    <string name="hdmi_in_2">HDMI 2</string>
-    <string name="hdmi_in_1">HDMI 1</string>
-    <string name="hdmi_in_0">HDMI 0</string>
+    <string name="hdmi_in_3">HDMI 4</string>
+    <string name="hdmi_in_2">HDMI 3</string>
+    <string name="hdmi_in_1">HDMI 2</string>
+    <string name="hdmi_in_0">HDMI 1</string>
     <string name="discard">Discard</string>
     <string name="confirm">Confirm</string>
     

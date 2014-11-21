@@ -1,16 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.amlogic.osdoverlay"
+    package="com.droidlogic.hdmiin"
     android:sharedUserId="android.uid.system"
     android:versionCode="1"
     android:versionName="1.0" >
     
-    <uses-sdk
-        android:minSdkVersion="14"
-        android:targetSdkVersion="16" />
+    <uses-sdk android:minSdkVersion="14" android:targetSdkVersion="14" />
 
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="droidlogic.permission.SYSTEM_CONTROL" /> 
     
     <application
         android:allowBackup="true"
@@ -19,38 +17,23 @@
         android:theme="@style/AppTheme" >
 
         <activity
-            android:name="com.amlogic.osdoverlay.SettingsActivity"
+            android:name="com.droidlogic.hdmiin.SettingsActivity"
             android:theme="@style/TransparentDialogTheme"
             android:label="@string/settings_activity" >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
         <activity
-            android:name="com.amlogic.osdoverlay.FullActivity"
+            android:name="com.droidlogic.hdmiin.FullActivity"
             android:theme="@style/TransparentTheme"
             android:label="@string/full_activity" >
-            <!-- <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter> -->
         </activity>
 
-        <service android:name=".FloatWindowService" />
-
-        <!-- <activity android:name="com.amlogic.osdoverlay.PipActivity" android:theme="@style/Theme.FloatTheme" >
-        </activity> -->
-
-        <!-- <receiver android:name=".FloatingWindowReceiver">
-            <intent-filter>
-                <action android:name="com.amlogic.action.START_FLOATING_VIDEO"></action>
-                <action android:name="com.amlogic.action.STOP_FLOATING_VIDEO"></action>
-            </intent-filter>
-        </receiver> -->
+        <service android:name=".SwitchFullService" />
+		<service android:name=".FloatWindowService" />
 
     </application>
 </manifest>

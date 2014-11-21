@@ -1,4 +1,4 @@
-package com.amlogic.osdoverlay;
+package com.droidlogic.hdmiin;
 
 import android.app.AlertDialog;
 import android.app.Dialog;
