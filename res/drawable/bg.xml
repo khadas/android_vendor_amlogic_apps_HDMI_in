@@ -1,5 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 
+<!--
+ Copyright (c) 2014 Amlogic, Inc. All rights reserved.
+
+ This source code is subject to the terms and conditions defined in the
+ file 'LICENSE' which is part of this source code package.
+
+ Description:
+-->
+
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
     <padding android:left="15dp" android:top="15dp" android:right="15dp" android:bottom="15dp" />
     <stroke android:width="3dip" color="#000000" />

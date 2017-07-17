@@ -1,4 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+
+<!--
+ Copyright (c) 2014 Amlogic, Inc. All rights reserved.
+
+ This source code is subject to the terms and conditions defined in the
+ file 'LICENSE' which is part of this source code package.
+
+ Description:
+-->
+
 <resources>
     <string name="app_name">Hdmi In</string>
     <string name="settings_activity">HDMIIN</string>
@@ -14,7 +24,7 @@
     <string name="hdmi_in_0">HDMI 1</string>
     <string name="discard">Discard</string>
     <string name="confirm">Confirm</string>
-    
+
     <string name="play">Play</string>
     <string name="stop">Stop</string>
     <string name="prev">Prev</string>

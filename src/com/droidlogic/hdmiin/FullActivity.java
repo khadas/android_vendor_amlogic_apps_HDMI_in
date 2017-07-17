@@ -1,3 +1,12 @@
+/*
+ * Copyright (c) 2014 Amlogic, Inc. All rights reserved.
+ *
+ * This source code is subject to the terms and conditions defined in the
+ * file 'LICENSE' which is part of this source code package.
+ *
+ * Description:
+ */
+
 package com.droidlogic.hdmiin;
 
 import android.app.Activity;
@@ -93,12 +102,12 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
     };
 
     private void closeScreenOffTimeout() {
-        if(mScreenLock.isHeld() == false)
+        if (mScreenLock.isHeld() == false)
             mScreenLock.acquire();
     }
-    
+
     private void openScreenOffTimeout() {
-        if(mScreenLock.isHeld() == true)
+        if (mScreenLock.isHeld() == true)
             mScreenLock.release();
     }
 
@@ -110,7 +119,7 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
         } catch (Exception ex) {
             Log.e(TAG, "getDeviceInAuxDigital error: " + ex);
         }
-        
+
         Log.d(TAG, "getDeviceInAuxDigital: " + mDeviceInAuxDigital);
     }
 
@@ -133,7 +142,7 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
         mInputSource = getIntent().getIntExtra("source", -1);
         Log.d(TAG, "onCreate(), mInputSource: " + mInputSource);
 
-        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, 
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
                 WindowManager.LayoutParams.FLAG_FULLSCREEN);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
 
@@ -569,7 +578,7 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
     }
 
     @Override
-    public boolean onKeyUp(int keyCode, KeyEvent event) 
+    public boolean onKeyUp(int keyCode, KeyEvent event)
     {
         if (keyCode == KeyEvent.KEYCODE_BACK)
         {
@@ -591,11 +600,11 @@ public class FullActivity extends Activity implements SurfaceHolder.Callback
     private Handler mHandler = new Handler()
     {
         @Override
-        public void handleMessage(Message msg) 
+        public void handleMessage(Message msg)
         {
             super.handleMessage(msg);
 
-            switch(msg.what)
+            switch (msg.what)
             {
                 case HDMI_IN_START:
                     {

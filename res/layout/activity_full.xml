@@ -1,17 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+ Copyright (c) 2014 Amlogic, Inc. All rights reserved.
+
+ This source code is subject to the terms and conditions defined in the
+ file 'LICENSE' which is part of this source code package.
+
+ Description:
+-->
+
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#00000000"
-   	>	
+    >
     <SurfaceView
-    	android:id="@+id/surfaceview"
-		android:layout_width="match_parent"
-		android:layout_height="match_parent"
+        android:id="@+id/surfaceview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
         >
     </SurfaceView>
-   	
-    <RelativeLayout 
+
+    <RelativeLayout
         android:id="@+id/top_layout"
         android:layout_width="match_parent"
         android:layout_height="@dimen/button_height"
@@ -29,7 +40,7 @@
             android:layout_alignParentLeft="true"
             >
         </Button>
-        
+
         <Button
             android:id="@+id/quit"
             android:layout_width="@dimen/button_width"

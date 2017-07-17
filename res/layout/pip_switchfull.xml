@@ -1,11 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+ Copyright (c) 2014 Amlogic, Inc. All rights reserved.
+
+ This source code is subject to the terms and conditions defined in the
+ file 'LICENSE' which is part of this source code package.
+
+ Description:
+-->
+
 <com.droidlogic.hdmiin.PipLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/layout"
     android:layout_width="wrap_content"
     android:layout_height="80dip"
     android:background="#00000000"
-   	>	
-   	
-    <RelativeLayout 
+    >
+
+    <RelativeLayout
         android:id="@+id/top_layout"
         android:layout_width="match_parent"
         android:layout_height="80dip"
@@ -23,7 +34,7 @@
             android:layout_alignParentLeft="true"
             >
         </Button>
-        
+
         <Button
             android:id="@+id/quit"
             android:layout_width="120dip"
